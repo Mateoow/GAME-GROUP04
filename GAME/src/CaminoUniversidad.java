@@ -2,331 +2,409 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
-
-// Importación para Jamepad
+import java.applet.Applet;
+import java.applet.AudioClip;
 import com.studiohartman.jamepad.*;
 
-public class CaminoUniversidad extends JPanel implements ActionListener, KeyListener {
-    private int boardWidth = 800;
-    private int boardHeight = 250;
+public class CaminoUniversidad extends JPanel implements ActionListener, KeyListener, MouseListener {
+    private final int WIDTH = 800;
+    private final int HEIGHT = 600;
     private SeleccionEscenario.Stage currentStage;
 
-    // Variables para Jamepad
+    // Control con Jamepad
     private ControllerManager controllers;
     private ControllerState currState;
     private boolean wasJumpPressed = false;
+    private boolean wasStartPressed = false;
 
-    // Images
-    private Image dinosaurImg;
-    private Image dinosaurDeadImg;
-    private Image dinosaurJumpImg;
-    private Image cactus1Img;
-    private Image cactus2Img;
-    private Image cactus3Img;
-    private Image backgroundDayImg;
-    private Image backgroundNightImg;
+    // Imágenes
+    private Image personajeImg;
+    private Image personajeMuertoImg;
+    private Image personajeSaltandoImg;
+    private Image obstaculo1Img;
+    private Image obstaculo2Img;
+    private Image obstaculo3Img;
+    private Image fondoDiaImg;
+    private Image fondoNocheImg;
 
-    // Game objects
-    private Block dinosaur;
-    private ArrayList<Block> cactusArray;
+    // Sonidos
+    private AudioClip sonidoSalto;
+    private AudioClip sonidoColision;
+    private AudioClip sonidoGanar;
+    private AudioClip sonidoBoton;
 
-    // Game physics
-    private int velocityX = -12;
-    private int velocityY = 0;
-    private int gravity = 1;
+    // Objetos del juego
+    private Block personaje;
+    private ArrayList<Block> obstaculos;
 
-    // Game state
-    private boolean gameOver = false;
-    private int score = 0;
-    private boolean gameOver = false;
-    private boolean gameWon = false;
-    
+    // Física del juego
+    private int velocidadX = -12;
+    private int velocidadY = 0;
+    private final int gravedad = 1;
+
+    // Estado del juego
+    private boolean juegoTerminado = false;
+    private boolean juegoGanado = false;
+    private int puntaje = 0;
+    private final Timer gameLoop;
+    private final Timer obstaculoTimer;
+
     // Botones
     private Rectangle botonMenuRect;
     private Rectangle botonReiniciarRect;
     private Rectangle botonSalirRect;
     private boolean mostrarBotones = false;
-    private Color colorBotonMenu = Color.BLUE;
-    private Color colorBotonReiniciar = Color.BLUE;
-    private Color colorBotonSalir = Color.BLUE;
+    private Color colorBotonMenu = new Color(70, 70, 200);
+    private Color colorBotonReiniciar = new Color(70, 200, 70);
+    private Color colorBotonSalir = new Color(200, 70, 70);
 
-    public CaminoUniversidad(SeleccionEscenario.Stage escenario) {
-        this.escenario = escenario;
+    public CaminoUniversidad(SeleccionEscenario.Stage stage) {
+        this.currentStage = stage;
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        setBackground(escenario == SeleccionEscenario.Stage.DIA ? 
-            new Color(135, 206, 235) : new Color(10, 10, 40));
-        
-        // Configurar timers
-        gameTimer = new Timer(16, this);
-        obstacleTimer = new Timer(2000, e -> addObstacle());
-        
-        // Inicializar rectángulos para los botones
-        botonMenuRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 30, 300, 40);
-        botonReiniciarRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 80, 300, 40);
-        botonSalirRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 130, 300, 40);
-        
-        // Configurar listeners
+        setBackground(stage == SeleccionEscenario.Stage.DIA ? 
+            new Color(240, 240, 240) : new Color(30, 30, 50));
+        setFocusable(true);
         addKeyListener(this);
+        addMouseListener(this);
 
         // Inicializar Jamepad
-        initializeJamepad();
-
-        // Load images (make sure to have these files in your project)
-        try {
-            dinosaurImg = new ImageIcon(getClass().getResource("./img/dino-run.gif")).getImage();
-            dinosaurDeadImg = new ImageIcon(getClass().getResource("./img/dino-dead.png")).getImage();
-            dinosaurJumpImg = new ImageIcon(getClass().getResource("./img/dino-jump.png")).getImage();
-            cactus1Img = new ImageIcon(getClass().getResource("./img/cactus1.png")).getImage();
-            cactus2Img = new ImageIcon(getClass().getResource("./img/cactus2.png")).getImage();
-            cactus3Img = new ImageIcon(getClass().getResource("./img/cactus3.png")).getImage();
-            backgroundDayImg = new ImageIcon(getClass().getResource("./img/day-background.png")).getImage();
-            backgroundNightImg = new ImageIcon(getClass().getResource("./img/night-background.png")).getImage();
-        } catch (Exception e) {
-            System.err.println("Error loading images: " + e.getMessage());
-        }
-
-        // Initialize dinosaur
-        int dinosaurWidth = 88;
-        int dinosaurHeight = 94;
-        int dinosaurX = 50;
-        int dinosaurY = boardHeight - dinosaurHeight;
-        dinosaur = new Block(dinosaurX, dinosaurY, dinosaurWidth, dinosaurHeight, dinosaurImg);
-
-        // Initialize cactus array
-        cactusArray = new ArrayList<>();
-
-        // Game loop
-        gameLoop = new Timer(1000 / 60, this);
-        gameLoop.start();
-
-        // Cactus spawn timer
-        placeCactusTimer = new Timer(1500, e -> placeCactus());
-        placeCactusTimer.start();
-    }
-
-    private void initializeJamepad() {
         try {
             controllers = new ControllerManager();
             controllers.initSDLGamepad();
-            System.out.println("Controladores conectados: " + controllers.getNumControllers());
-
-            if (controllers.getNumControllers() > 0) {
-                System.out.println("Mando PS4 detectado y listo para usar!");
-            } else {
-                System.out.println("No se detectó ningún mando. Puedes usar el teclado.");
-            }
         } catch (Exception e) {
-            System.out.println("Error inicializando Jamepad: " + e.getMessage());
+            System.err.println("Error inicializando Jamepad: " + e.getMessage());
         }
+
+        // Cargar imágenes
+        cargarImagenes();
+        
+        // Cargar sonidos
+        cargarSonidos();
+
+        // Inicializar personaje
+        personaje = new Block(50, HEIGHT - 94, 88, 94, personajeImg);
+
+        // Inicializar obstáculos
+        obstaculos = new ArrayList<>();
+
+        // Inicializar rectángulos para botones
+        botonMenuRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 20, 300, 40);
+        botonReiniciarRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 70, 300, 40);
+        botonSalirRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 120, 300, 40);
+
+        // Temporizadores del juego
+        gameLoop = new Timer(1000/60, this); // 60 FPS
+        obstaculoTimer = new Timer(1500, e -> agregarObstaculo());
+        
+        gameLoop.start();
+        obstaculoTimer.start();
     }
 
-    // Método para leer input del PS4
-    private void readPS4Input() {
-        if (controllers == null || controllers.getNumControllers() == 0)
-            return;
-
+    private void cargarImagenes() {
         try {
-            // Obtener estado del primer controlador
-            currState = controllers.getState(0);
-
-            if (!currState.isConnected)
-                return;
-
-            // Cambiar de currState.a (X) a currState.x (Cuadrado)
-            boolean squarePressed = currState.x; // Botón Cuadrado
-
-            // Detectar presión del botón (evitar repetición)
-            if (squarePressed && !wasJumpPressed) {
-                handleJump();
-            }
-            wasJumpPressed = squarePressed;
-
+            personajeImg = new ImageIcon(getClass().getResource("resources/img/personaje.png")).getImage();
+            personajeMuertoImg = new ImageIcon(getClass().getResource("resources/img/personaje-muerto.png")).getImage();
+            personajeSaltandoImg = new ImageIcon(getClass().getResource("resources/img/personaje-saltando.png")).getImage();
+            obstaculo1Img = new ImageIcon(getClass().getResource("resources/img/obstaculo1.png")).getImage();
+            obstaculo2Img = new ImageIcon(getClass().getResource("resources/img/obstaculo2.png")).getImage();
+            obstaculo3Img = new ImageIcon(getClass().getResource("resources/img/obstaculo3.png")).getImage();
+            fondoDiaImg = new ImageIcon(getClass().getResource("resources/img/fondo-dia.png")).getImage();
+            fondoNocheImg = new ImageIcon(getClass().getResource("resources/img/fondo-noche.png")).getImage();
         } catch (Exception e) {
-            System.out.println("Error leyendo mando: " + e.getMessage());
+            System.err.println("Error cargando imágenes: " + e.getMessage());
         }
     }
 
-    private void handleJump() {
-        if (gameOver) {
-            // Reiniciar completamente el juego
-            resetGame();
-            // Forzar un repintado inmediato
-            repaint();
-            // Reiniciar los timers si no están corriendo
-            if (!gameLoop.isRunning()) {
-                gameLoop.start();
-            }
-            if (!placeCactusTimer.isRunning()) {
-                placeCactusTimer.start();
-            }
-        } else if (dinosaur.y == boardHeight - dinosaur.height) {
-            // Saltar normal
-            velocityY = -17;
-            dinosaur.img = dinosaurJumpImg;
+    private void cargarSonidos() {
+        try {
+            sonidoSalto = Applet.newAudioClip(getClass().getResource("resources/sonidos/salto.wav"));
+            sonidoColision = Applet.newAudioClip(getClass().getResource("resources/sonidos/colision.wav"));
+            sonidoGanar = Applet.newAudioClip(getClass().getResource("resources/sonidos/ganar.wav"));
+            sonidoBoton = Applet.newAudioClip(getClass().getResource("resources/sonidos/boton.wav"));
+        } catch (Exception e) {
+            System.err.println("Error cargando sonidos: " + e.getMessage());
         }
     }
 
-    private void placeCactus() {
-        if (gameOver)
-            return;
+    private void agregarObstaculo() {
+        if (juegoTerminado || juegoGanado) return;
 
         double chance = Math.random();
-        int cactusWidth;
-        Image cactusImg;
+        int anchoObstaculo;
+        Image imgObstaculo;
 
         if (chance > 0.90) {
-            cactusWidth = 102;
-            cactusImg = cactus3Img;
+            anchoObstaculo = 102;
+            imgObstaculo = obstaculo3Img;
         } else if (chance > 0.70) {
-            cactusWidth = 69;
-            cactusImg = cactus2Img;
+            anchoObstaculo = 69;
+            imgObstaculo = obstaculo2Img;
         } else if (chance > 0.50) {
-            cactusWidth = 34;
-            cactusImg = cactus1Img;
+            anchoObstaculo = 34;
+            imgObstaculo = obstaculo1Img;
         } else {
             return;
         }
 
-        int cactusHeight = 70;
-        int cactusX = boardWidth;
-        int cactusY = boardHeight - cactusHeight;
-        cactusArray.add(new Block(cactusX, cactusY, cactusWidth, cactusHeight, cactusImg));
+        obstaculos.add(new Block(WIDTH, HEIGHT - 70, anchoObstaculo, 70, imgObstaculo));
 
-        if (cactusArray.size() > 10) {
-            cactusArray.remove(0);
+        if (obstaculos.size() > 10) {
+            obstaculos.remove(0);
         }
     }
-    
-    private void addObstacle() {
-        if (gameOver || gameWon) return;
-        
-        int height = 30 + (int)(Math.random() * 50);
-        obstacles.add(new Rectangle(WIDTH, HEIGHT - height, 30, height));
-    }
-    
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-
-        // Draw background
-        Image bgImage = currentStage == SeleccionEscenario.Stage.DIA ? backgroundDayImg : backgroundNightImg;
-        if (bgImage != null) {
-            g.drawImage(bgImage, 0, 0, boardWidth, boardHeight, null);
+        
+        // Dibujar fondo
+        Image fondo = currentStage == SeleccionEscenario.Stage.DIA ? fondoDiaImg : fondoNocheImg;
+        if (fondo != null) {
+            g.drawImage(fondo, 0, 0, WIDTH, HEIGHT, null);
         }
-
-        // Draw dinosaur
-        g.drawImage(dinosaur.img, dinosaur.x, dinosaur.y, dinosaur.width, dinosaur.height, null);
-
-        // Draw cacti
-        for (Block cactus : cactusArray) {
-            g.drawImage(cactus.img, cactus.x, cactus.y, cactus.width, cactus.height, null);
+        
+        // Dibujar obstáculos
+        for (Block obstaculo : obstaculos) {
+            g.drawImage(obstaculo.img, obstaculo.x, obstaculo.y, obstaculo.width, obstaculo.height, null);
         }
-
-        // Draw score
-        Color textColor = currentStage == SeleccionEscenario.Stage.DIA ? Color.BLACK : Color.WHITE;
-        g.setColor(textColor);
-        g.setFont(new Font("Courier", Font.BOLD, 32));
-        if (gameOver) {
-            g.drawString("Game Over: " + score, 10, 35);
-            g.setFont(new Font("Courier", Font.PLAIN, 16));
-            g.drawString("Presiona ESPACIO o ▢ (Cuadrado) para reiniciar", 10, 60);
-        } else {
-            g.drawString(String.valueOf(score), 10, 35);
+        
+        // Dibujar personaje
+        g.drawImage(personaje.img, personaje.x, personaje.y, personaje.width, personaje.height, null);
+        
+        // Dibujar puntaje
+        g.setColor(currentStage == SeleccionEscenario.Stage.DIA ? Color.BLACK : Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 24));
+        g.drawString("Puntaje: " + puntaje, 20, 30);
+        
+        // Dibujar pantalla de fin de juego
+        if (juegoTerminado || juegoGanado) {
+            dibujarPantallaFinal(g);
         }
-
     }
 
-    private void move() {
-        // Física del dinosaurio (sin comprobación de pausa)
-        velocityY += gravity;
-        dinosaur.y += velocityY;
+    private void dibujarPantallaFinal(Graphics g) {
+        // Fondo semitransparente
+        g.setColor(new Color(0, 0, 0, 150));
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+        
+        // Mensaje principal
+        String mensaje = juegoGanado ? "¡GANASTE!" : "¡PERDISTE!";
+        Color color = juegoGanado ? Color.GREEN : Color.RED;
+        g.setColor(color);
+        g.setFont(new Font("Arial", Font.BOLD, 48));
+        
+        FontMetrics fm = g.getFontMetrics();
+        int x = (WIDTH - fm.stringWidth(mensaje)) / 2;
+        int y = HEIGHT / 2 - 50;
+        g.drawString(mensaje, x, y);
+        
+        // Puntaje final
+        g.setFont(new Font("Arial", Font.PLAIN, 24));
+        g.setColor(Color.WHITE);
+        // String textoPuntaje = "Puntaje final: " + puntaje;
+        // x = (WIDTH - fm.stringWidth(textoPuntaje)) / 2;
+        // g.drawString(textoPuntaje, x, y + 50);
+        
+        // Dibujar botones
+        dibujarBotones(g);
+    }
 
-        if (dinosaur.y > boardHeight - dinosaur.height) {
-            dinosaur.y = boardHeight - dinosaur.height;
-            velocityY = 0;
-            dinosaur.img = dinosaurImg;
+    private void dibujarBotones(Graphics g) {
+        // Botón Menú Principal
+        g.setColor(colorBotonMenu);
+        g.fillRoundRect(botonMenuRect.x, botonMenuRect.y, botonMenuRect.width, botonMenuRect.height, 10, 10);
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 20));
+        g.drawString("Menú Principal", WIDTH/2 - 70, HEIGHT/2 + 45);
+        
+        // Botón Reiniciar
+        g.setColor(colorBotonReiniciar);
+        g.fillRoundRect(botonReiniciarRect.x, botonReiniciarRect.y, botonReiniciarRect.width, botonReiniciarRect.height, 10, 10);
+        g.setColor(Color.WHITE);
+        g.drawString("Reiniciar Juego", WIDTH/2 - 70, HEIGHT/2 + 95);
+        
+        // Botón Salir
+        g.setColor(colorBotonSalir);
+        g.fillRoundRect(botonSalirRect.x, botonSalirRect.y, botonSalirRect.width, botonSalirRect.height, 10, 10);
+        g.setColor(Color.WHITE);
+        g.drawString("Salir", WIDTH/2 - 30, HEIGHT/2 + 145);
+    }
+
+    private void mover() {
+        if (juegoTerminado || juegoGanado) return;
+        
+        // Leer input del mando PS4
+        leerInputMando();
+        
+        // Física del personaje
+        velocidadY += gravedad;
+        personaje.y += velocidadY;
+
+        if (personaje.y > HEIGHT - personaje.height) {
+            personaje.y = HEIGHT - personaje.height;
+            velocidadY = 0;
+            personaje.img = personajeImg;
         }
 
-        // Mover cactus
-        for (Block cactus : cactusArray) {
-            cactus.x += velocityX;
-            if (collision(dinosaur, cactus)) {
-                gameOver = true;
-                dinosaur.img = dinosaurDeadImg;
+        // Mover obstáculos y detectar colisiones
+        for (Block obstaculo : obstaculos) {
+            obstaculo.x += velocidadX;
+            
+            if (colision(personaje, obstaculo)) {
+                juegoTerminado = true;
+                personaje.img = personajeMuertoImg;
+                mostrarBotones = true;
+                reproducirSonido(sonidoColision);
             }
         }
 
-        // Aumentar puntuación
-        score++;
+        // Incrementar puntaje
+        puntaje++;
+        
+        // Verificar victoria
+        if (puntaje >= 1000) {
+            juegoGanado = true;
+            mostrarBotones = true;
+            reproducirSonido(sonidoGanar);
+        }
     }
 
-    private boolean collision(Block a, Block b) {
+    private boolean colision(Block a, Block b) {
         return a.x < b.x + b.width &&
-                a.x + a.width > b.x &&
-                a.y < b.y + b.height &&
-                a.y + a.height > b.y;
+               a.x + a.width > b.x &&
+               a.y < b.y + b.height &&
+               a.y + a.height > b.y;
     }
-    
+
+    private void leerInputMando() {
+        if (controllers == null || controllers.getNumControllers() == 0) return;
+        
+        try {
+            currState = controllers.getState(0);
+            
+            if (!currState.isConnected) return;
+            
+            // Botón X (Saltar/Reiniciar)
+            if (currState.x && !wasJumpPressed) {
+                if (juegoTerminado || juegoGanado) {
+                    reiniciarJuego();
+                } else if (personaje.y == HEIGHT - personaje.height) {
+                    velocidadY = -17;
+                    personaje.img = personajeSaltandoImg;
+                    reproducirSonido(sonidoSalto);
+                }
+            }
+            wasJumpPressed = currState.x;
+            
+            // Botón OPTIONS (Menú Principal)
+            if (currState.start && !wasStartPressed && (juegoTerminado || juegoGanado)) {
+                volverAlMenu();
+            }
+            wasStartPressed = currState.start;
+            
+        } catch (Exception e) {
+            System.err.println("Error leyendo mando: " + e.getMessage());
+        }
+    }
+
+    private void reproducirSonido(AudioClip sonido) {
+        if (sonido != null) {
+            new Thread(sonido::play).start();
+        }
+    }
+
     @Override
     public void actionPerformed(ActionEvent e) {
-        readPS4Input();
-        move();
+        mover();
         repaint();
-
-        if (gameOver) {
-            placeCactusTimer.stop();
-            gameLoop.stop();
+        
+        if (juegoTerminado || juegoGanado) {
+            obstaculoTimer.stop();
         }
-        repaint();
     }
-    
+
     @Override
     public void keyPressed(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_SPACE) {
-            handleJump();
+            if (juegoTerminado || juegoGanado) {
+                reiniciarJuego();
+            } else if (personaje.y == HEIGHT - personaje.height) {
+                velocidadY = -17;
+                personaje.img = personajeSaltandoImg;
+                reproducirSonido(sonidoSalto);
+            }
+        } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE && (juegoTerminado || juegoGanado)) {
+            volverAlMenu();
         }
-
     }
 
-    private void resetGame() {
-        // Resetear posición y apariencia del dinosaurio
-        dinosaur.y = boardHeight - dinosaur.height;
-        dinosaur.img = dinosaurImg;
-        velocityY = 0;
-
-        // Limpiar todos los cactus
-        cactusArray.clear();
-
-        // Resetear puntuación y estado
-        score = 0;
-        gameOver = false;
-
-        // Asegurarse de que los timers estén activos
-        if (!gameLoop.isRunning()) {
-            gameLoop.start();
-        }
-        if (!placeCactusTimer.isRunning()) {
-            placeCactusTimer.start();
-        }
-
-        // Forzar focus para asegurar que recibe inputs
+    private void reiniciarJuego() {
+        reproducirSonido(sonidoBoton);
+        
+        personaje.y = HEIGHT - personaje.height;
+        personaje.img = personajeImg;
+        velocidadY = 0;
+        obstaculos.clear();
+        puntaje = 0;
+        juegoTerminado = false;
+        juegoGanado = false;
+        mostrarBotones = false;
+        
+        if (!gameLoop.isRunning()) gameLoop.start();
+        if (!obstaculoTimer.isRunning()) obstaculoTimer.start();
+        
         requestFocusInWindow();
     }
 
-    @Override
-    public void keyTyped(KeyEvent e) {
+    private void volverAlMenu() {
+        reproducirSonido(sonidoBoton);
+        JFrame frame = (JFrame)SwingUtilities.getWindowAncestor(this);
+        frame.dispose();
+        new PantallaInicio().setVisible(true);
     }
 
+    // MouseListener methods
     @Override
-    public void keyReleased(KeyEvent e) {
-    }
-
-    // Limpiar recursos al cerrar
-    public void cleanup() {
-        if (controllers != null) {
-            controllers.quitSDLGamepad();
+    public void mouseClicked(MouseEvent e) {
+        if (mostrarBotones) {
+            if (botonMenuRect.contains(e.getPoint())) {
+                volverAlMenu();
+            } else if (botonReiniciarRect.contains(e.getPoint())) {
+                reiniciarJuego();
+            } else if (botonSalirRect.contains(e.getPoint())) {
+                System.exit(0);
+            }
         }
     }
+
+    @Override
+    public void mouseEntered(MouseEvent e) {
+        if (mostrarBotones) {
+            if (botonMenuRect.contains(e.getPoint())) {
+                colorBotonMenu = new Color(100, 100, 255);
+            } else if (botonReiniciarRect.contains(e.getPoint())) {
+                colorBotonReiniciar = new Color(100, 255, 100);
+            } else if (botonSalirRect.contains(e.getPoint())) {
+                colorBotonSalir = new Color(255, 100, 100);
+            }
+            repaint();
+        }
+    }
+
+    @Override
+    public void mouseExited(MouseEvent e) {
+        if (mostrarBotones) {
+            colorBotonMenu = new Color(70, 70, 200);
+            colorBotonReiniciar = new Color(70, 200, 70);
+            colorBotonSalir = new Color(200, 70, 70);
+            repaint();
+        }
+    }
+
+    @Override public void mousePressed(MouseEvent e) {}
+    @Override public void mouseReleased(MouseEvent e) {}
+    @Override public void keyTyped(KeyEvent e) {}
+    @Override public void keyReleased(KeyEvent e) {}
 
     private class Block {
         int x, y, width, height;
@@ -341,28 +419,9 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         }
     }
 
-    @Override
-    public void mouseExited(MouseEvent e) {
-        if (mostrarBotones) {
-            colorBotonMenu = Color.BLUE;
-            colorBotonReiniciar = Color.BLUE;
-            colorBotonSalir = Color.BLUE;
-            repaint();
+    public void limpiarRecursos() {
+        if (controllers != null) {
+            controllers.quitSDLGamepad();
         }
     }
-
-    @Override
-    public void mousePressed(MouseEvent e) {}
-
-    @Override
-    public void mouseReleased(MouseEvent e) {}
-    
-    private void volverAlMenu() {
-        JFrame frame = (JFrame)SwingUtilities.getWindowAncestor(this);
-        frame.dispose();
-        new PantallaInicio().setVisible(true);
-    }
-    
-    @Override public void keyTyped(KeyEvent e) {}
-    @Override public void keyReleased(KeyEvent e) {}
 }
