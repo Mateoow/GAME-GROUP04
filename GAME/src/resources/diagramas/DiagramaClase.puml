@@ -1,0 +1,65 @@
+@startuml ClassDiagram_GAME_GROUP4
+title Diagrama de Clases - GAME-GROUP4
+
+class App {
+    + main(String[] args)
+}
+
+class PantallaInicio {
+    - titulo: JLabel
+    - iniciarBtn: JButton
+    - salirBtn: JButton
+    + PantallaInicio()
+    - iniciarJuego()
+}
+
+class SeleccionEscenario {
+    - stageSeleccionado: Stage
+    + getStageSeleccionado() : Stage
+    + setStageSeleccionado(stage: Stage)
+}
+
+class CaminoUniversidad {
+    - WIDTH: int
+    - HEIGHT: int
+    - currentStage: Stage
+    - velocidadX: int
+    - velocidadY: int
+    - gravedad: int
+    - juegoTerminado: boolean
+    - juegoGanado: boolean
+    - puntaje: int
+    + CaminoUniversidad(stage: Stage)
+    - startGame()
+    - agregarObstaculo()
+    - updateGame()
+    - handleControllerInput()
+    - reiniciarJuego()
+    - volverAlMenu()
+    + cleanup()
+}
+
+class ControlPS4 {
+    + mando() : void
+}
+
+class ScoreDAO {
+    - URL: String
+    + crearTabla() : void
+    + guardarScore(puntaje: int) : void
+}
+
+class VentanaPuntajes {
+    + VentanaPuntajes()
+}
+
+App --> PantallaInicio 
+PantallaInicio --> SeleccionEscenario 
+PantallaInicio --> CaminoUniversidad
+CaminoUniversidad --> SeleccionEscenario 
+CaminoUniversidad --> ScoreDAO 
+CaminoUniversidad --> VentanaPuntajes 
+VentanaPuntajes --> ScoreDAO  
+CaminoUniversidad ..> ControlPS4 
+
+@enduml

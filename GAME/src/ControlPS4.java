@@ -20,5 +20,4 @@ public class ControlPS4 {
         System.out.println("Presiona botones para ver su mapeo (Ctrl+C para salir)");
         System.out.println("=".repeat(60));
     }
-
 }

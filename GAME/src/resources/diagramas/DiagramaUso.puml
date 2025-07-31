@@ -1,0 +1,47 @@
+@startuml UseCase_GAME_GROUP4
+left to right direction
+title Casos de uso - GAME-GROUP4
+
+actor Jugador
+actor "Mando PS4" as PS4
+
+rectangle "Juego" {
+    usecase "Iniciar aplicación" as U1
+    usecase "Seleccionar escenario" as U2
+    usecase "Iniciar juego" as U3
+    usecase "Controlar personaje / saltar" as U4
+    usecase "Alcanzar puntaje objetivo" as U5
+    usecase "Detectar colisión" as U6
+    usecase "Terminar partida" as U7
+    usecase "Mostrar pantalla final" as U8
+    usecase "Guardar puntaje" as U9
+    usecase "Ver puntajes" as U10
+    usecase "Reiniciar juego" as U11
+    usecase "Volver al menú" as U12
+    usecase "Salir" as U13
+}
+
+Jugador --> U1
+Jugador --> U2
+Jugador --> U3
+Jugador --> U4
+Jugador --> U10
+Jugador --> U11
+Jugador --> U12
+Jugador --> U13
+
+Jugador ..> PS4 : use
+
+PS4 --> U4
+PS4 --> U11
+PS4 --> U12
+
+U3 .> U2 : <<include>>
+U7 .> U6 : <<include>>
+U7 .> U5 : <<include>>
+U8 .> U7 : <<extend>>
+U9 .> U7 : <<include>>
+U8 .> U9 : <<include>>
+
+
+@enduml
