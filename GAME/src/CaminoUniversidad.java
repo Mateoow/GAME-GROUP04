@@ -1,9 +1,10 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
-import java.applet.Applet;
-import java.applet.AudioClip;
+import javax.imageio.ImageIO;
+import java.io.InputStream;
 import com.studiohartman.jamepad.*;
 
 public class CaminoUniversidad extends JPanel implements ActionListener, KeyListener, MouseListener {
@@ -11,45 +12,39 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     private final int HEIGHT = 600;
     private SeleccionEscenario.Stage currentStage;
 
-    // Control con Jamepad
+    // Controller support
     private ControllerManager controllers;
     private ControllerState currState;
     private boolean wasJumpPressed = false;
     private boolean wasStartPressed = false;
 
-    // Imágenes
-    private Image personajeImg;
-    private Image personajeMuertoImg;
-    private Image personajeSaltandoImg;
-    private Image obstaculo1Img;
-    private Image obstaculo2Img;
-    private Image obstaculo3Img;
-    private Image fondoDiaImg;
-    private Image fondoNocheImg;
+    // Images
+    private BufferedImage personajeImg;
+    private BufferedImage personajeMuertoImg;
+    private BufferedImage personajeSaltandoImg;
+    private BufferedImage obstaculo1Img;
+    private BufferedImage obstaculo2Img;
+    private BufferedImage obstaculo3Img;
+    private BufferedImage fondoDiaImg;
+    private BufferedImage fondoNocheImg;
 
-    // Sonidos
-    private AudioClip sonidoSalto;
-    private AudioClip sonidoColision;
-    private AudioClip sonidoGanar;
-    private AudioClip sonidoBoton;
-
-    // Objetos del juego
+    // Game objects
     private Block personaje;
     private ArrayList<Block> obstaculos;
 
-    // Física del juego
+    // Physics
     private int velocidadX = -12;
     private int velocidadY = 0;
     private final int gravedad = 1;
 
-    // Estado del juego
+    // Game state
     private boolean juegoTerminado = false;
     private boolean juegoGanado = false;
     private int puntaje = 0;
     private final Timer gameLoop;
     private final Timer obstaculoTimer;
 
-    // Botones
+    // Buttons
     private Rectangle botonMenuRect;
     private Rectangle botonReiniciarRect;
     private Rectangle botonSalirRect;
@@ -61,92 +56,127 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     public CaminoUniversidad(SeleccionEscenario.Stage stage) {
         this.currentStage = stage;
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        setBackground(stage == SeleccionEscenario.Stage.DIA ? 
-            new Color(240, 240, 240) : new Color(30, 30, 50));
         setFocusable(true);
         addKeyListener(this);
         addMouseListener(this);
 
-        // Inicializar Jamepad
+        // Initialize controller
         try {
             controllers = new ControllerManager();
             controllers.initSDLGamepad();
         } catch (Exception e) {
-            System.err.println("Error inicializando Jamepad: " + e.getMessage());
+            System.err.println("Controller error: " + e.getMessage());
         }
 
-        // Cargar imágenes
+        // Load resources
         cargarImagenes();
         
-        // Cargar sonidos
-        cargarSonidos();
-
-        // Inicializar personaje
+        // Initialize game objects
         personaje = new Block(50, HEIGHT - 94, 88, 94, personajeImg);
-
-        // Inicializar obstáculos
         obstaculos = new ArrayList<>();
 
-        // Inicializar rectángulos para botones
-        botonMenuRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 20, 300, 40);
-        botonReiniciarRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 70, 300, 40);
-        botonSalirRect = new Rectangle(WIDTH/2 - 150, HEIGHT/2 + 120, 300, 40);
+        // Setup buttons (now centered)
+        int buttonWidth = 300;
+        int buttonHeight = 40;
+        int buttonY = HEIGHT/2 + 50;
+        int buttonSpacing = 60;
+        
+        botonMenuRect = new Rectangle((WIDTH - buttonWidth)/2, buttonY, buttonWidth, buttonHeight);
+        botonReiniciarRect = new Rectangle((WIDTH - buttonWidth)/2, buttonY + buttonSpacing, buttonWidth, buttonHeight);
+        botonSalirRect = new Rectangle((WIDTH - buttonWidth)/2, buttonY + 2*buttonSpacing, buttonWidth, buttonHeight);
 
-        // Temporizadores del juego
+        // Game timers
         gameLoop = new Timer(1000/60, this); // 60 FPS
         obstaculoTimer = new Timer(1500, e -> agregarObstaculo());
         
-        gameLoop.start();
-        obstaculoTimer.start();
+        startGame();
     }
 
     private void cargarImagenes() {
         try {
-            personajeImg = new ImageIcon(getClass().getResource("resources/img/personaje.png")).getImage();
-            personajeMuertoImg = new ImageIcon(getClass().getResource("resources/img/personaje-muerto.png")).getImage();
-            personajeSaltandoImg = new ImageIcon(getClass().getResource("resources/img/personaje-saltando.png")).getImage();
-            obstaculo1Img = new ImageIcon(getClass().getResource("resources/img/obstaculo1.png")).getImage();
-            obstaculo2Img = new ImageIcon(getClass().getResource("resources/img/obstaculo2.png")).getImage();
-            obstaculo3Img = new ImageIcon(getClass().getResource("resources/img/obstaculo3.png")).getImage();
-            fondoDiaImg = new ImageIcon(getClass().getResource("resources/img/fondo-dia.png")).getImage();
-            fondoNocheImg = new ImageIcon(getClass().getResource("resources/img/fondo-noche.png")).getImage();
+            // Load character images
+            personajeImg = cargarImagen("/img/personaje.png");
+            personajeMuertoImg = cargarImagen("/img/personaje-muerto.png");
+            personajeSaltandoImg = cargarImagen("/img/personaje-saltando.png");
+            
+            // Load obstacle images
+            obstaculo1Img = cargarImagen("/img/obstaculo1.png");
+            obstaculo2Img = cargarImagen("/img/obstaculo2.png");
+            obstaculo3Img = cargarImagen("/img/obstaculo3.png");
+            
+            // Load backgrounds
+            fondoDiaImg = cargarImagen("/img/fondo-dia.png");
+            fondoNocheImg = cargarImagen("/img/fondo-noche.png");
+            
         } catch (Exception e) {
-            System.err.println("Error cargando imágenes: " + e.getMessage());
+            System.err.println("Error loading images: " + e.getMessage());
+            crearImagenesPorDefecto();
         }
     }
 
-    private void cargarSonidos() {
-        try {
-            sonidoSalto = Applet.newAudioClip(getClass().getResource("resources/sonidos/salto.wav"));
-            sonidoColision = Applet.newAudioClip(getClass().getResource("resources/sonidos/colision.wav"));
-            sonidoGanar = Applet.newAudioClip(getClass().getResource("resources/sonidos/ganar.wav"));
-            sonidoBoton = Applet.newAudioClip(getClass().getResource("resources/sonidos/boton.wav"));
-        } catch (Exception e) {
-            System.err.println("Error cargando sonidos: " + e.getMessage());
+    private BufferedImage cargarImagen(String ruta) throws Exception {
+        try (InputStream is = getClass().getResourceAsStream(ruta)) {
+            if (is == null) {
+                throw new Exception("Image not found: " + ruta);
+            }
+            return ImageIO.read(is);
         }
+    }
+
+    private void crearImagenesPorDefecto() {
+        // Create default colored images if loading fails
+        personajeImg = crearImagenColor(Color.RED, 88, 94);
+        personajeMuertoImg = crearImagenColor(Color.GRAY, 88, 94);
+        personajeSaltandoImg = crearImagenColor(Color.BLUE, 88, 94);
+        obstaculo1Img = crearImagenColor(Color.GREEN, 34, 70);
+        obstaculo2Img = crearImagenColor(Color.GREEN, 69, 70);
+        obstaculo3Img = crearImagenColor(Color.GREEN, 102, 70);
+        fondoDiaImg = crearImagenColor(new Color(135, 206, 235), WIDTH, HEIGHT);
+        fondoNocheImg = crearImagenColor(new Color(10, 10, 50), WIDTH, HEIGHT);
+    }
+
+    private BufferedImage crearImagenColor(Color color, int width, int height) {
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = img.createGraphics();
+        g2d.setColor(color);
+        g2d.fillRect(0, 0, width, height);
+        g2d.dispose();
+        return img;
+    }
+
+    private void startGame() {
+        // Reset game state
+        personaje.y = HEIGHT - personaje.height;
+        personaje.img = personajeImg;
+        velocidadY = 0;
+        obstaculos.clear();
+        puntaje = 0;
+        juegoTerminado = false;
+        juegoGanado = false;
+        mostrarBotones = false;
+        
+        // Start timers
+        gameLoop.start();
+        obstaculoTimer.start();
     }
 
     private void agregarObstaculo() {
         if (juegoTerminado || juegoGanado) return;
 
         double chance = Math.random();
-        int anchoObstaculo;
-        Image imgObstaculo;
+        Block nuevoObstaculo;
 
         if (chance > 0.90) {
-            anchoObstaculo = 102;
-            imgObstaculo = obstaculo3Img;
+            nuevoObstaculo = new Block(WIDTH, HEIGHT - 70, 102, 70, obstaculo3Img);
         } else if (chance > 0.70) {
-            anchoObstaculo = 69;
-            imgObstaculo = obstaculo2Img;
+            nuevoObstaculo = new Block(WIDTH, HEIGHT - 70, 69, 70, obstaculo2Img);
         } else if (chance > 0.50) {
-            anchoObstaculo = 34;
-            imgObstaculo = obstaculo1Img;
+            nuevoObstaculo = new Block(WIDTH, HEIGHT - 70, 34, 70, obstaculo1Img);
         } else {
             return;
         }
 
-        obstaculos.add(new Block(WIDTH, HEIGHT - 70, anchoObstaculo, 70, imgObstaculo));
+        obstaculos.add(nuevoObstaculo);
 
         if (obstaculos.size() > 10) {
             obstaculos.remove(0);
@@ -157,37 +187,35 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         
-        // Dibujar fondo
-        Image fondo = currentStage == SeleccionEscenario.Stage.DIA ? fondoDiaImg : fondoNocheImg;
-        if (fondo != null) {
-            g.drawImage(fondo, 0, 0, WIDTH, HEIGHT, null);
-        }
+        // Draw background
+        BufferedImage fondo = currentStage == SeleccionEscenario.Stage.DIA ? fondoDiaImg : fondoNocheImg;
+        g.drawImage(fondo, 0, 0, WIDTH, HEIGHT, null);
         
-        // Dibujar obstáculos
+        // Draw obstacles
         for (Block obstaculo : obstaculos) {
             g.drawImage(obstaculo.img, obstaculo.x, obstaculo.y, obstaculo.width, obstaculo.height, null);
         }
         
-        // Dibujar personaje
+        // Draw character
         g.drawImage(personaje.img, personaje.x, personaje.y, personaje.width, personaje.height, null);
         
-        // Dibujar puntaje
+        // Draw score
         g.setColor(currentStage == SeleccionEscenario.Stage.DIA ? Color.BLACK : Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 24));
         g.drawString("Puntaje: " + puntaje, 20, 30);
         
-        // Dibujar pantalla de fin de juego
+        // Draw end game screen
         if (juegoTerminado || juegoGanado) {
             dibujarPantallaFinal(g);
         }
     }
 
     private void dibujarPantallaFinal(Graphics g) {
-        // Fondo semitransparente
+        // Semi-transparent overlay
         g.setColor(new Color(0, 0, 0, 150));
         g.fillRect(0, 0, WIDTH, HEIGHT);
         
-        // Mensaje principal
+        // Main message
         String mensaje = juegoGanado ? "¡GANASTE!" : "¡PERDISTE!";
         Color color = juegoGanado ? Color.GREEN : Color.RED;
         g.setColor(color);
@@ -198,14 +226,14 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         int y = HEIGHT / 2 - 50;
         g.drawString(mensaje, x, y);
         
-        // Puntaje final
+        // Score
         g.setFont(new Font("Arial", Font.PLAIN, 24));
         g.setColor(Color.WHITE);
-        // String textoPuntaje = "Puntaje final: " + puntaje;
-        // x = (WIDTH - fm.stringWidth(textoPuntaje)) / 2;
-        // g.drawString(textoPuntaje, x, y + 50);
+        String textoPuntaje = "Puntaje: " + puntaje;
+        x = (WIDTH - fm.stringWidth(textoPuntaje)) / 2;
+        g.drawString(textoPuntaje, x, y + 50);
         
-        // Dibujar botones
+        // Buttons
         dibujarBotones(g);
     }
 
@@ -215,107 +243,106 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         g.fillRoundRect(botonMenuRect.x, botonMenuRect.y, botonMenuRect.width, botonMenuRect.height, 10, 10);
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 20));
-        g.drawString("Menú Principal", WIDTH/2 - 70, HEIGHT/2 + 45);
+        
+        FontMetrics fm = g.getFontMetrics();
+        String menuText = "Menú Principal";
+        int menuTextX = botonMenuRect.x + (botonMenuRect.width - fm.stringWidth(menuText)) / 2;
+        g.drawString(menuText, menuTextX, botonMenuRect.y + 27);
         
         // Botón Reiniciar
         g.setColor(colorBotonReiniciar);
         g.fillRoundRect(botonReiniciarRect.x, botonReiniciarRect.y, botonReiniciarRect.width, botonReiniciarRect.height, 10, 10);
         g.setColor(Color.WHITE);
-        g.drawString("Reiniciar Juego", WIDTH/2 - 70, HEIGHT/2 + 95);
+        String reiniciarText = "Reiniciar Juego";
+        int reiniciarTextX = botonReiniciarRect.x + (botonReiniciarRect.width - fm.stringWidth(reiniciarText)) / 2;
+        g.drawString(reiniciarText, reiniciarTextX, botonReiniciarRect.y + 27);
         
         // Botón Salir
         g.setColor(colorBotonSalir);
         g.fillRoundRect(botonSalirRect.x, botonSalirRect.y, botonSalirRect.width, botonSalirRect.height, 10, 10);
         g.setColor(Color.WHITE);
-        g.drawString("Salir", WIDTH/2 - 30, HEIGHT/2 + 145);
+        String salirText = "Salir";
+        int salirTextX = botonSalirRect.x + (botonSalirRect.width - fm.stringWidth(salirText)) / 2;
+        g.drawString(salirText, salirTextX, botonSalirRect.y + 27);
     }
 
-    private void mover() {
+    private void updateGame() {
         if (juegoTerminado || juegoGanado) return;
         
-        // Leer input del mando PS4
-        leerInputMando();
+        // Handle controller input
+        handleControllerInput();
         
-        // Física del personaje
+        // Apply gravity
         velocidadY += gravedad;
         personaje.y += velocidadY;
 
+        // Ground collision
         if (personaje.y > HEIGHT - personaje.height) {
             personaje.y = HEIGHT - personaje.height;
             velocidadY = 0;
             personaje.img = personajeImg;
         }
 
-        // Mover obstáculos y detectar colisiones
+        // Move obstacles and check collisions
         for (Block obstaculo : obstaculos) {
             obstaculo.x += velocidadX;
             
-            if (colision(personaje, obstaculo)) {
+            if (checkCollision(personaje, obstaculo)) {
                 juegoTerminado = true;
                 personaje.img = personajeMuertoImg;
                 mostrarBotones = true;
-                reproducirSonido(sonidoColision);
             }
         }
 
-        // Incrementar puntaje
+        // Increase score
         puntaje++;
         
-        // Verificar victoria
-        if (puntaje >= 1000) {
+        // Check win condition (now 3000 points instead of 1000)
+        if (puntaje >= 3000) {
             juegoGanado = true;
             mostrarBotones = true;
-            reproducirSonido(sonidoGanar);
         }
     }
 
-    private boolean colision(Block a, Block b) {
-        return a.x < b.x + b.width &&
-               a.x + a.width > b.x &&
-               a.y < b.y + b.height &&
-               a.y + a.height > b.y;
-    }
-
-    private void leerInputMando() {
+    private void handleControllerInput() {
         if (controllers == null || controllers.getNumControllers() == 0) return;
         
         try {
             currState = controllers.getState(0);
-            
             if (!currState.isConnected) return;
             
-            // Botón X (Saltar/Reiniciar)
+            // Jump/restart with X button
             if (currState.x && !wasJumpPressed) {
                 if (juegoTerminado || juegoGanado) {
                     reiniciarJuego();
                 } else if (personaje.y == HEIGHT - personaje.height) {
                     velocidadY = -17;
                     personaje.img = personajeSaltandoImg;
-                    reproducirSonido(sonidoSalto);
                 }
             }
             wasJumpPressed = currState.x;
             
-            // Botón OPTIONS (Menú Principal)
+            // Menu with OPTIONS button
             if (currState.start && !wasStartPressed && (juegoTerminado || juegoGanado)) {
                 volverAlMenu();
             }
             wasStartPressed = currState.start;
             
         } catch (Exception e) {
-            System.err.println("Error leyendo mando: " + e.getMessage());
+            System.err.println("Controller error: " + e.getMessage());
         }
     }
 
-    private void reproducirSonido(AudioClip sonido) {
-        if (sonido != null) {
-            new Thread(sonido::play).start();
-        }
+    private boolean checkCollision(Block a, Block b) {
+        return a.x < b.x + b.width &&
+               a.x + a.width > b.x &&
+               a.y < b.y + b.height &&
+               a.y + a.height > b.y;
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        mover();
+        updateGame();
         repaint();
         
         if (juegoTerminado || juegoGanado) {
@@ -331,7 +358,6 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
             } else if (personaje.y == HEIGHT - personaje.height) {
                 velocidadY = -17;
                 personaje.img = personajeSaltandoImg;
-                reproducirSonido(sonidoSalto);
             }
         } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE && (juegoTerminado || juegoGanado)) {
             volverAlMenu();
@@ -339,8 +365,6 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     }
 
     private void reiniciarJuego() {
-        reproducirSonido(sonidoBoton);
-        
         personaje.y = HEIGHT - personaje.height;
         personaje.img = personajeImg;
         velocidadY = 0;
@@ -357,13 +381,12 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     }
 
     private void volverAlMenu() {
-        reproducirSonido(sonidoBoton);
         JFrame frame = (JFrame)SwingUtilities.getWindowAncestor(this);
         frame.dispose();
         new PantallaInicio().setVisible(true);
     }
 
-    // MouseListener methods
+    // Mouse events
     @Override
     public void mouseClicked(MouseEvent e) {
         if (mostrarBotones) {
@@ -406,7 +429,7 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     @Override public void keyTyped(KeyEvent e) {}
     @Override public void keyReleased(KeyEvent e) {}
 
-    private class Block {
+    private static class Block {
         int x, y, width, height;
         Image img;
 
@@ -419,7 +442,7 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         }
     }
 
-    public void limpiarRecursos() {
+    public void cleanup() {
         if (controllers != null) {
             controllers.quitSDLGamepad();
         }
