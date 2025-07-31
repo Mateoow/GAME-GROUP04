@@ -1,3 +1,4 @@
+package main;
 import com.studiohartman.jamepad.*;
 
 public class ControlPS4 {
