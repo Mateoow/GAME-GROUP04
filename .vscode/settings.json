@@ -1,6 +1,7 @@
 {
     "java.project.referencedLibraries": [
         "GAME/lib/sdl2gdx-1.0.5.jar",
-        "GAME/lib/Jamepad.jar"
+        "GAME/lib/Jamepad.jar",
+        "GAME/lib/sqlite-jdbc-3.50.3.0.jar",
     ]
 }

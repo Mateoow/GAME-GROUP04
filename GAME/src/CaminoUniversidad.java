@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import javax.imageio.ImageIO;
 import java.io.InputStream;
 import com.studiohartman.jamepad.*;
+//import resources.VentanaPuntajes;
 
 public class CaminoUniversidad extends JPanel implements ActionListener, KeyListener, MouseListener {
     private final int WIDTH = 800;
@@ -206,7 +207,7 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         
         // Draw end game screen
         if (juegoTerminado || juegoGanado) {
-            dibujarPantallaFinal(g);
+            dibujarPantallaFinal(g);            
         }
     }
 
@@ -267,7 +268,7 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     }
 
     private void updateGame() {
-        if (juegoTerminado || juegoGanado) return;
+        if (juegoTerminado || juegoGanado) return;        
         
         // Handle controller input
         handleControllerInput();
@@ -291,6 +292,8 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
                 juegoTerminado = true;
                 personaje.img = personajeMuertoImg;
                 mostrarBotones = true;
+                ScoreDAO.guardarScore(puntaje);
+                new VentanaPuntajes().setVisible(true); // Mostrar tabla
             }
         }
 
@@ -301,6 +304,8 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         if (puntaje >= 3000) {
             juegoGanado = true;
             mostrarBotones = true;
+            ScoreDAO.guardarScore(puntaje);
+            new VentanaPuntajes().setVisible(true); // Mostrar tabla
         }
     }
 
