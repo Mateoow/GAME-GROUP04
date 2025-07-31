@@ -3,10 +3,18 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
 
+// Importación para Jamepad
+import com.studiohartman.jamepad.*;
+
 public class CaminoUniversidad extends JPanel implements ActionListener, KeyListener {
     private int boardWidth = 800;
     private int boardHeight = 250;
     private SeleccionEscenario.Stage currentStage;
+
+    // Variables para Jamepad
+    private ControllerManager controllers;
+    private ControllerState currState;
+    private boolean wasJumpPressed = false;
 
     // Images
     private Image dinosaurImg;
@@ -21,12 +29,12 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     // Game objects
     private Block dinosaur;
     private ArrayList<Block> cactusArray;
-    
+
     // Game physics
     private int velocityX = -12;
     private int velocityY = 0;
     private int gravity = 1;
-    
+
     // Game state
     private boolean gameOver = false;
     private int score = 0;
@@ -39,6 +47,9 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         setBackground(stage == SeleccionEscenario.Stage.DIA ? Color.lightGray : new Color(20, 20, 40));
         setFocusable(true);
         addKeyListener(this);
+
+        // Inicializar Jamepad
+        initializeJamepad();
 
         // Load images (make sure to have these files in your project)
         try {
@@ -65,7 +76,7 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         cactusArray = new ArrayList<>();
 
         // Game loop
-        gameLoop = new Timer(1000/60, this);
+        gameLoop = new Timer(1000 / 60, this);
         gameLoop.start();
 
         // Cactus spawn timer
@@ -73,8 +84,71 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
         placeCactusTimer.start();
     }
 
+    private void initializeJamepad() {
+        try {
+            controllers = new ControllerManager();
+            controllers.initSDLGamepad();
+            System.out.println("Controladores conectados: " + controllers.getNumControllers());
+
+            if (controllers.getNumControllers() > 0) {
+                System.out.println("Mando PS4 detectado y listo para usar!");
+            } else {
+                System.out.println("No se detectó ningún mando. Puedes usar el teclado.");
+            }
+        } catch (Exception e) {
+            System.out.println("Error inicializando Jamepad: " + e.getMessage());
+        }
+    }
+
+    // Método para leer input del PS4
+    private void readPS4Input() {
+        if (controllers == null || controllers.getNumControllers() == 0)
+            return;
+
+        try {
+            // Obtener estado del primer controlador
+            currState = controllers.getState(0);
+
+            if (!currState.isConnected)
+                return;
+
+            // Cambiar de currState.a (X) a currState.x (Cuadrado)
+            boolean squarePressed = currState.x; // Botón Cuadrado
+
+            // Detectar presión del botón (evitar repetición)
+            if (squarePressed && !wasJumpPressed) {
+                handleJump();
+            }
+            wasJumpPressed = squarePressed;
+
+        } catch (Exception e) {
+            System.out.println("Error leyendo mando: " + e.getMessage());
+        }
+    }
+
+    private void handleJump() {
+        if (gameOver) {
+            // Reiniciar completamente el juego
+            resetGame();
+            // Forzar un repintado inmediato
+            repaint();
+            // Reiniciar los timers si no están corriendo
+            if (!gameLoop.isRunning()) {
+                gameLoop.start();
+            }
+            if (!placeCactusTimer.isRunning()) {
+                placeCactusTimer.start();
+            }
+        } else if (dinosaur.y == boardHeight - dinosaur.height) {
+            // Saltar normal
+            velocityY = -17;
+            dinosaur.img = dinosaurJumpImg;
+        }
+    }
+
     private void placeCactus() {
-        if (gameOver) return;
+        if (gameOver)
+            return;
 
         double chance = Math.random();
         int cactusWidth;
@@ -106,33 +180,37 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        
+
         // Draw background
         Image bgImage = currentStage == SeleccionEscenario.Stage.DIA ? backgroundDayImg : backgroundNightImg;
         if (bgImage != null) {
             g.drawImage(bgImage, 0, 0, boardWidth, boardHeight, null);
         }
-        
+
         // Draw dinosaur
         g.drawImage(dinosaur.img, dinosaur.x, dinosaur.y, dinosaur.width, dinosaur.height, null);
-        
+
         // Draw cacti
         for (Block cactus : cactusArray) {
             g.drawImage(cactus.img, cactus.x, cactus.y, cactus.width, cactus.height, null);
         }
-        
+
         // Draw score
-        g.setColor(currentStage == SeleccionEscenario.Stage.DIA ? Color.BLACK : Color.WHITE);
+        Color textColor = currentStage == SeleccionEscenario.Stage.DIA ? Color.BLACK : Color.WHITE;
+        g.setColor(textColor);
         g.setFont(new Font("Courier", Font.BOLD, 32));
         if (gameOver) {
             g.drawString("Game Over: " + score, 10, 35);
+            g.setFont(new Font("Courier", Font.PLAIN, 16));
+            g.drawString("Presiona ESPACIO o ▢ (Cuadrado) para reiniciar", 10, 60);
         } else {
             g.drawString(String.valueOf(score), 10, 35);
         }
+
     }
 
     private void move() {
-        // Dinosaur physics
+        // Física del dinosaurio (sin comprobación de pausa)
         velocityY += gravity;
         dinosaur.y += velocityY;
 
@@ -142,7 +220,7 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
             dinosaur.img = dinosaurImg;
         }
 
-        // Move cacti
+        // Mover cactus
         for (Block cactus : cactusArray) {
             cactus.x += velocityX;
             if (collision(dinosaur, cactus)) {
@@ -151,21 +229,23 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
             }
         }
 
-        // Increase score
+        // Aumentar puntuación
         score++;
     }
 
     private boolean collision(Block a, Block b) {
         return a.x < b.x + b.width &&
-               a.x + a.width > b.x &&
-               a.y < b.y + b.height &&
-               a.y + a.height > b.y;
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y;
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
+        readPS4Input();
         move();
         repaint();
+
         if (gameOver) {
             placeCactusTimer.stop();
             gameLoop.stop();
@@ -175,31 +255,50 @@ public class CaminoUniversidad extends JPanel implements ActionListener, KeyList
     @Override
     public void keyPressed(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_SPACE) {
-            if (!gameOver && dinosaur.y == boardHeight - dinosaur.height) {
-                velocityY = -17;
-                dinosaur.img = dinosaurJumpImg;
-            } else if (gameOver) {
-                resetGame();
-            }
+            handleJump();
         }
+
     }
 
     private void resetGame() {
+        // Resetear posición y apariencia del dinosaurio
         dinosaur.y = boardHeight - dinosaur.height;
         dinosaur.img = dinosaurImg;
         velocityY = 0;
+
+        // Limpiar todos los cactus
         cactusArray.clear();
+
+        // Resetear puntuación y estado
         score = 0;
         gameOver = false;
-        gameLoop.start();
-        placeCactusTimer.start();
+
+        // Asegurarse de que los timers estén activos
+        if (!gameLoop.isRunning()) {
+            gameLoop.start();
+        }
+        if (!placeCactusTimer.isRunning()) {
+            placeCactusTimer.start();
+        }
+
+        // Forzar focus para asegurar que recibe inputs
+        requestFocusInWindow();
     }
 
     @Override
-    public void keyTyped(KeyEvent e) {}
+    public void keyTyped(KeyEvent e) {
+    }
 
     @Override
-    public void keyReleased(KeyEvent e) {}
+    public void keyReleased(KeyEvent e) {
+    }
+
+    // Limpiar recursos al cerrar
+    public void cleanup() {
+        if (controllers != null) {
+            controllers.quitSDLGamepad();
+        }
+    }
 
     private class Block {
         int x, y, width, height;
